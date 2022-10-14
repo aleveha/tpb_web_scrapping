@@ -106,7 +106,7 @@ def scrap_web(links: List[str], parse_html_article) -> None:
             action_item = grequests.get(
                 link,
                 hooks={"response": lambda res, *args, **kwargs: article_response_hook(res, response_list, parse_html_article, args, kwargs)},
-                timeout=1
+                timeout=2
             )
             async_list.append(action_item)
 

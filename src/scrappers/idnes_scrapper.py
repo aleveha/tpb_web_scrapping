@@ -42,11 +42,12 @@ def parse_html_article(html, link):
 
 
 def main():
+    """Main function"""
     print(f"Start scrapping {URL}")
     sitemap_links = [f"https://www.idnes.cz/zpravy/archiv{'' if i == 1 else f'/{i}'}?datum=&idostrova=idnes" for i in range(1, 30000)]
     links = load_links(sitemap_links, URL, sitemap_response_hook)
-    scrap_web(links[181000:], parse_html_article)
+    scrap_web(links, parse_html_article)
+
 
 if __name__ == "__main__":
     main()
-    """Main function"""
