@@ -12,6 +12,15 @@ articles_collection = tpb_db.get_collection("articles")
 links_collection = tpb_db.get_collection("links")
 
 
+# export links:
+# mongoexport -d tpb -c links -o links.json --jsonArray --pretty --authenticationDatabase=admin -u root -p root
+# docker cp mongo_tpb:"links.json" ~/Personal/TUL/TPB/tpb_cviceni/links.json
+
+# export articles:
+# mongoexport -d tpb -c articles -o articles.json --jsonArray --pretty --authenticationDatabase=admin -u root -p root
+# docker cp mongo_tpb:"articles.json" ~/Personal/TUL/TPB/tpb_cviceni/articles.json
+
+
 def insert_articles(new_articles: List[Article]) -> None:
     """Insert multiple articles to database"""
     articles_collection.insert_many([new_article.__dict__ for new_article in new_articles])
@@ -41,7 +50,7 @@ def main():
     """Main function"""
     # LINKS
     # delete all links
-    # links_collection.delete_many({}})
+    # links_collection.delete_many({})
 
     # get all links count
     print("Links ", links_collection.count_documents({}))
