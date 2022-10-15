@@ -9,11 +9,11 @@ services:
         ports:
             - "27017:27017"
 
-    mongo_import:
-        image: mongo:latest
-        links:
-            - mongodb
-        volumes:
-            - ./:/app
-        command:
-            ./app/entrypoint.sh
+#    mongo_import:
+#        image: mongo:latest
+#        links:
+#            - mongodb
+#        volumes:
+#            - ./:/app
+#        command:
+#            ./app/entrypoint.sh

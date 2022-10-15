@@ -6,8 +6,8 @@ from scrappers.lupa_scrapper import main as lupa_scrapper
 from scrappers.the_code_media_scrapper import main as the_code_media_scrapper
 
 
-def main():
-    """Main function"""
+def load_data():
+    """Load data"""
     scrappers = [the_code_media_scrapper, lupa_scrapper, idnes_scrapper]
 
     all_start_time = time.perf_counter()
@@ -26,6 +26,16 @@ def main():
     all_end_time = time.perf_counter()
     all_execution_time = all_end_time - all_start_time
     print(f"Finish all scrappers with time: {all_execution_time}s")
+
+
+def get_basic_info():
+    """Get basic info"""
+
+
+def main():
+    """Main function"""
+    load_data()
+    # get_basic_info()
 
 
 if __name__ == "__main__":

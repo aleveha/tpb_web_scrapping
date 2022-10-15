@@ -1,33 +1,19 @@
 """Shared functions"""
-from typing import List
+from typing import List, Dict
 
 import grequests
 from bs4 import BeautifulSoup
 
-from persistence.mongo import delete_link, get_links_by_slug, insert_links, article_exists, insert_articles
-from typings import Article
+from persistence.mongo import article_exists, insert_articles
 
 
 def divide_to_chunks(array: List, chunk_size: int) -> List[List]:
     """Divide array to smaller chunks"""
     res = []
-
     for i in range(0, len(array), chunk_size):
         res.append(array[i:i + chunk_size])
 
     return res
-
-
-def remove_duplicates(array: List) -> List:
-    """Remove duplicates from string array"""
-    without_duplicates = []
-
-    for elem in array:
-        if elem not in without_duplicates:
-            without_duplicates.append(elem)
-            continue
-
-    return without_duplicates
 
 
 def sitemap_response_hook(response, response_list: List[str], base_url: str, *args, **kwargs) -> None:
@@ -37,83 +23,71 @@ def sitemap_response_hook(response, response_list: List[str], base_url: str, *ar
     response_list += [sitemap_tag.text for sitemap_tag in sitemap_tags if sitemap_tag.text != base_url and sitemap_tag.text.startswith(base_url)]
 
 
-def load_links(request_links: List[str], base_url: str, response_hook) -> List[str]:
+def load_links_chunk(request_link_chunk: List[str], base_url: str, response_hook) -> List[str]:
     """Load links"""
-    print("Loading links..")
+    requests = []
+    links = []
 
-    exists_links = get_links_by_slug(base_url)
-
-    if len(exists_links) > 0:
-        return exists_links
-
-    chunk_size = 30
-    actual_chunk_size = len(request_links) if len(request_links) < chunk_size else chunk_size
-    request_link_chunks = divide_to_chunks(request_links, actual_chunk_size)
-    response_list = []
-
-    for request_link_chunk in request_link_chunks:
-        async_list = []
-        links = []
-
-        for link in request_link_chunk:
-            if link in response_list:
-                continue
-
+    for link in request_link_chunk:
+        if link not in [request.url for request in requests]:
             action_item = grequests.get(link, hooks={"response": lambda res, *args, **kwargs: response_hook(res, links, base_url, args, kwargs)})
-            async_list.append(action_item)
+            requests.append(action_item)
 
-        grequests.map(async_list)
+    grequests.map(requests)
 
-        links, duplicates = remove_duplicates(links)
-
-        print(f"Inserting {len(links)} links..")
-        insert_links(links)
-        response_list += links
-
-    return response_list
+    return list(set(links))
 
 
-def article_response_hook(response, response_list: List[Article], parse_html_article, *args, **kwargs) -> None:
+def load_articles_chunk(article_links_chunk: List[str], parse_html_article) -> None:
+    requests = []
+    response_list: List[Dict] = []
+
+    for article_link in article_links_chunk:
+        if article_exists(article_link):
+            continue
+
+        action_item = grequests.get(
+            article_link,
+            hooks={"response": lambda res, *args, **kwargs: article_response_hook(res, response_list, parse_html_article, args, kwargs)},
+            timeout=2
+        )
+        requests.append(action_item)
+
+    grequests.map(requests)
+
+    if len(response_list) > 0:
+        insert_articles(response_list)
+        print(f"Inserted {len(response_list)} articles\n")
+
+
+def article_response_hook(response, response_list: List[Dict], parse_html_article, *args, **kwargs) -> None:
     """Response hook"""
     try:
-        category, comments_count, content, photos_count, publish_date, title = parse_html_article(response.text, response.url)
-        if content == "":
-            print(f"Empty content, delete and skip: {response.url}")
-            delete_link(response.url)
-            return
-        response_list.append(Article(category, comments_count, content, response.url, photos_count, publish_date, title))
+        article = parse_html_article(response.text, response.url)
+        if article["content"] != "":
+            response_list.append(article)
+
     except Exception as exc:
         print(f"Error: {exc}")
-        print(f"Delete and skip: {response.url}")
-        delete_link(response.url)
 
 
-def scrap_web(links: List[str], parse_html_article) -> None:
+def scrap_web(request_links: List[str], base_url: str, parse_sitemap, parse_html_article) -> None:
     """Parse web"""
-    print(f"\nStart scrapping {len(links)} links..\n")
-    chunk_size = 50
-    chunked_links_array = list(divide_to_chunks(links, chunk_size))
-    inserted_articles_count = 0
-    for chunk_idx, links_chunk in enumerate(chunked_links_array):
-        chunk_number = chunk_idx * chunk_size
-        print(f"Fetching {chunk_number + 1} – {chunk_number + chunk_size}..")
+    links_chunk_size = 30
+    links_chunk_size = len(request_links) if len(request_links) < links_chunk_size else links_chunk_size
 
-        async_list = []
-        response_list: List[Article] = []
-        for link_idx, link in enumerate(links_chunk):
-            if article_exists(link):
-                continue
-            action_item = grequests.get(
-                link,
-                hooks={"response": lambda res, *args, **kwargs: article_response_hook(res, response_list, parse_html_article, args, kwargs)},
-                timeout=2
-            )
-            async_list.append(action_item)
+    request_link_chunks = divide_to_chunks(request_links, links_chunk_size)
 
-        grequests.map(async_list)
-        if len(response_list) > 0:
-            insert_articles(response_list)
-            inserted_articles_count += len(response_list)
-            print(f"Inserted {len(response_list)} articles\n")
+    for request_link_chunk in request_link_chunks:
+        links = load_links_chunk(request_link_chunk, base_url, parse_sitemap)
 
-    print(f"Inserted {inserted_articles_count}/{len(links)} articles")
+        articles_chunk_size = 100
+        articles_chunk_size = len(links) if len(links) < articles_chunk_size else articles_chunk_size
+
+        chunked_article_links_array = divide_to_chunks(links, articles_chunk_size)
+
+        for article_links_chunk_idx, article_links_chunk in enumerate(chunked_article_links_array):
+            article_links_chunk_number = article_links_chunk_idx * articles_chunk_size
+            print(f"Fetching {article_links_chunk_number + 1} – {article_links_chunk_number + articles_chunk_size}..")
+
+            load_articles_chunk(article_links_chunk, parse_html_article)
