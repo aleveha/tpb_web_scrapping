@@ -1,5 +1,5 @@
 """Mongo persistence"""
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from pymongo import MongoClient
 
@@ -24,13 +24,134 @@ def article_exists(link: str) -> bool:
     return bool(articles_collection.find_one({"link": link}))
 
 
+def get_all_articles_count() -> int:
+    """Get all articles count"""
+    return articles_collection.count_documents({})
+
+
+def get_duplicates_count() -> int:
+    """Get duplicates count"""
+    return len(list(articles_collection.aggregate([{"$group": {"_id": "$link", "count": {"$sum": 1}}}, {"$match": {"count": {"$gt": 1}}}])))
+
+
+def get_oldest_article_date() -> str:
+    """Get oldest article date"""
+    return articles_collection.find_one(sort=[("publish_date", 1)])["publish_date"]
+
+
+def get_most_commented_article_title() -> Tuple[str, int]:
+    """Get most commented article title"""
+    article = articles_collection.find_one(sort=[("comments_count", -1)])
+    return article["title"], article["comments_count"]
+
+
+def get_article_with_most_photos_count() -> Tuple[str, int]:
+    """Get article with most photos count"""
+    article = articles_collection.find_one(sort=[("photos_count", -1)])
+    return article["title"], article["photos_count"]
+
+
+def get_articles_by_publish_year() -> List[Dict]:
+    """Get articles by publish year"""
+    return list(articles_collection.aggregate(
+        [{"$group": {"_id": {"$year": {"$dateFromString": {"dateString": "$publish_date"}}}, "count": {"$sum": 1}}}, {"$sort": {"_id": 1}}])
+    )
+
+
+def get_unique_categories_count_with_articles_count() -> List[Dict]:
+    """Get unique categories count with articles count"""
+    return list(articles_collection.aggregate(
+        [{"$group": {"_id": "$category", "count": {"$sum": 1}}}, {"$sort": {"count": -1}}])
+    )
+
+
+def get_most_frequent_words_in_title_by_specific_year(year: int = 2021, limit: int = 5) -> List[Dict]:
+    """Get five most frequent words in title by specific year"""
+    return list(articles_collection.aggregate([
+        {"$match": {"publish_date": {"$regex": f"^{year}"}}},
+        {"$project": {"title": {"$toLower": "$title"}, "title_words": {"$split": ["$title", " "]}}},
+        {"$unwind": "$title_words"},
+        {"$project": {"title_words": 1, "title_word_len": {"$strLenCP": "$title_words"}}},
+        # {"$match": {"title_word_len": {"$gt": 3}}},
+        {"$group": {"_id": "$title_words", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": limit}
+    ]))
+
+
+def count_all_comments_in_all_articles() -> int:
+    """Count all comments count"""
+    return list(articles_collection.aggregate([{"$group": {"_id": None, "count": {"$sum": "$comments_count"}}}]))[0]["count"]
+
+
+def count_all_words_in_content_in_all_articles():
+    """Count all words count in all articles"""
+    return list(articles_collection.aggregate([
+        {"$project": {"content_words": {"$split": ["$content", " "]}}},
+        {"$unwind": "$content_words"},
+        {"$group": {"_id": "$_id", 'sum': {"$sum": 1}}},
+        {"$group": {"_id": None, "count": {'$sum': '$sum'}}}
+    ]))[0]["count"]
+
+
+def get_most_frequent_words_in_content(limit: int = 8) -> List[Dict]:
+    """Get most frequent words in content"""
+    return list(articles_collection.aggregate([
+        {"$project": {"content": {"$toLower": "$content"}, "content_words": {"$split": ["$content", " "]}}},
+        {"$unwind": "$content_words"},
+        {"$project": {"content_words": 1, "content_word_len": {"$strLenCP": "$content_words"}}},
+        {"$match": {"content_word_len": {"$gt": 6}}},
+        {"$group": {"_id": "$content_words", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": limit}
+    ]))
+
+
+def get_articles_with_most_freq_specific_word_in_content(word: str, limit: int = 3) -> List[Dict]:
+    """Get articles with most frequent specific word in content"""
+    return list(articles_collection.aggregate([
+        {"$match": {"content": {"$regex": f"{word}", "$options": "i"}}},
+        {"$project": {"link": 1, "content": {"$toLower": "$content"}, "word_occur": {"$split": [f"$content", f"{word.lower()}"]}}},
+        {"$unwind": "$word_occur"},
+        {"$group": {"_id": "$link", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": limit}
+    ]))
+
+
+def get_article_by_size(sorting: int = 1):
+    """Get the smallest article"""
+    return list(articles_collection.aggregate([
+        {"$project": {"link": 1, "title": 1, "content_words": {"$split": ["$content", " "]}}},
+        {"$unwind": "$content_words"},
+        {"$group": {"_id": {"link": "$link", "title": "$title"}, 'article_size': {"$sum": 1}}},
+        {"$sort": {"article_size": sorting}},
+        {"$limit": 1}
+    ]))[0]
+
+
+def get_average_word_length_in_all_articles():
+    """Get average word length in all articles"""
+    return list(articles_collection.aggregate([
+        {"$project": {"content_words": {"$split": ["$content", " "]}}},
+        {"$unwind": "$content_words"},
+        {"$project": {"content_word_len": {"$strLenCP": "$content_words"}}},
+        {"$group": {"_id": None, "avg_word_len": {"$avg": "$content_word_len"}}}
+    ]))[0]["avg_word_len"]
+
+
+def get_months_with_most_and_least_articles(sorting: int = 1) -> Tuple[str, str]:
+    """Get months with most and least articles"""
+    return list(articles_collection.aggregate([
+        {"$group": {"_id": {"$month": {"$dateFromString": {"dateString": "$publish_date"}}}, "count": {"$sum": 1}}},
+        {"$sort": {"count": sorting}},
+        {"$limit": 1}
+    ]))[0]["_id"]
+
+
 def main():
     """Main function"""
-    # delete all articles
-    # articles_collection.delete_many({})
-
-    # get all articles count
-    print("Articles ", articles_collection.count_documents({}))
+    print("Articles count:", get_all_articles_count())
 
 
 if __name__ == "__main__":

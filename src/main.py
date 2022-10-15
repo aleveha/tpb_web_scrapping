@@ -1,6 +1,12 @@
 """Parse news"""
 import time
+from pprint import pprint
 
+from persistence.mongo import get_all_articles_count, get_duplicates_count, get_oldest_article_date, get_most_commented_article_title, \
+    get_article_with_most_photos_count, get_articles_by_publish_year, get_unique_categories_count_with_articles_count, \
+    get_most_frequent_words_in_title_by_specific_year, count_all_comments_in_all_articles, count_all_words_in_content_in_all_articles, \
+    get_most_frequent_words_in_content, get_articles_with_most_freq_specific_word_in_content, get_article_by_size, \
+    get_average_word_length_in_all_articles, get_months_with_most_and_least_articles
 from scrappers.idnes_scrapper import main as idnes_scrapper
 from scrappers.lupa_scrapper import main as lupa_scrapper
 from scrappers.the_code_media_scrapper import main as the_code_media_scrapper
@@ -30,12 +36,37 @@ def load_data():
 
 def get_basic_info():
     """Get basic info"""
+    print("1. Articles count:", get_all_articles_count())
+    print("2. Duplicates count:", get_duplicates_count())
+    print("3. Oldest article date:", get_oldest_article_date())
+    print("4. Most commented article: ", get_most_commented_article_title())
+    print("5. Article with most photos: ", get_article_with_most_photos_count())
+    print("6. Articles by publish year:")
+    pprint(get_articles_by_publish_year())
+    print("7. Unique categories count with articles count:")
+    pprint(get_unique_categories_count_with_articles_count())
+    print("8. Five most freq words in specific year:")
+    pprint(get_most_frequent_words_in_title_by_specific_year())
+    print("9. Count all comments count: ", count_all_comments_in_all_articles())
+    print("10. Count all words count: ", count_all_words_in_content_in_all_articles())
+
+    print("11. Eight most freq words in content:")
+    pprint(get_most_frequent_words_in_content())
+    print("12. Articles with most freq specific word in content:")
+    pprint(get_articles_with_most_freq_specific_word_in_content("covid"))
+    print("13.1 Smallest article:")
+    pprint(get_article_by_size(1))
+    print("13.2 Biggest article:")
+    pprint(get_article_by_size(-1))
+    print("14. Average word length in all articles: ", get_average_word_length_in_all_articles())
+    print("15.1 Months with least articles:", get_months_with_most_and_least_articles(1))
+    print("15.2 Months with most articles:", get_months_with_most_and_least_articles(-1))
 
 
 def main():
     """Main function"""
     load_data()
-    # get_basic_info()
+    get_basic_info()
 
 
 if __name__ == "__main__":
