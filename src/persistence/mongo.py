@@ -149,6 +149,96 @@ def get_months_with_most_and_least_articles(sorting: int = 1) -> Tuple[str, str]
     ]))[0]["_id"]
 
 
+def get_articles_showing_addition_over_time() -> List[Dict]:
+    """Get articles showing addition over time"""
+    return list(articles_collection.aggregate([
+        {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": {"$dateFromString": {"dateString": "$publish_date"}}}},
+                    "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]))
+
+
+def get_articles_content_count_and_comments_count() -> List[Dict]:
+    """Get articles content count and comments count"""
+    return list(articles_collection.aggregate([
+        {"$project": {"_id": None, "content_words_count": 1, "comments_count": 1}},
+    ]))
+
+
+def get_articles_count_by_category() -> List[Dict]:
+    """Get articles count by category"""
+    return list(articles_collection.aggregate([
+        {"$group": {"_id": "$category", "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gt": 5000}}},
+    ]))
+
+
+def get_random_article() -> Dict:
+    """Get random article"""
+    return articles_collection.aggregate([{"$sample": {"size": 1}}]).next()
+
+
+def get_avg_photos_count_in_articles() -> float:
+    """Get average photos count in articles"""
+    return list(articles_collection.aggregate([
+        {"$group": {"_id": None, "avg_photos_count": {"$avg": "$photos_count"}}}
+    ]))[0]["avg_photos_count"]
+
+
+def get_articles_count_by_comments_count(comments_count: int) -> int:
+    """Get articles count by comments count"""
+    res = list(articles_collection.aggregate([
+        {"$match": {"comments_count": {"$gt": comments_count}}},
+        {"$group": {"_id": None, "count": {"$sum": 1}}}
+    ]))
+    return res[0]["count"] if len(res) > 0 else 0
+
+
+def get_articles_count_per_category_by_year(year: int) -> List[Dict]:
+    """Get articles count per category by year"""
+    return list(articles_collection.aggregate([
+        {"$match": {"publish_date": {"$regex": f"{year}", "$options": "i"}}},
+        {"$group": {"_id": {"category": "$category", "year": {"$year": {"$dateFromString": {"dateString": "$publish_date"}}}},
+                    "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]))
+
+
+def get_articles_count_and_words_count() -> List[Dict]:
+    """Get articles count and words count"""
+    return list(articles_collection.aggregate([
+        {"$project": {"_id": None, "content_words_count": 1, "comments_count": 1}},
+    ]))
+
+
+def get_average_word_length_in_article() -> List[Dict]:
+    """Get average word length in article"""
+    return list(articles_collection.aggregate([
+        {"$project": {"_id": 1, "content_words": {"$split": ["$content", " "]}}},
+        {"$unwind": "$content_words"},
+        {"$project": {"_id": 1, "content_word_len": {"$strLenCP": "$content_words"}}},
+        {"$group": {"_id": "$_id", "avg_word_len": {"$avg": "$content_word_len"}}},
+        # {"$match": {"avg_word_len": {"$gt": 10}}},
+    ]))
+
+
+def get_articles_count_by_day_of_week() -> List[Dict]:
+    """Get articles count by day of week"""
+    return list(articles_collection.aggregate([
+        {"$group": {"_id": {"$dayOfWeek": {"$dateFromString": {"dateString": "$publish_date"}}}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]))
+
+
+def get_articles_count_by_word_in_title_by_year(words: List[str]) -> List[Dict]:
+    """Get articles count by word in title by year"""
+    return list(articles_collection.aggregate([
+        {"$match": {"title": {"$regex": f"({'|'.join(words)})", "$options": "i"}}},
+        {"$group": {"_id": {"$year": {"$dateFromString": {"dateString": "$publish_date"}}}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]))
+
+
 def main():
     """Main function"""
     print("Articles count:", get_all_articles_count())
